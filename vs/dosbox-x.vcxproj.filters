@@ -1671,6 +1671,7 @@
     <ClCompile Include="..\src\output\output_direct3d11.cpp">
       <Filter>Sources\output</Filter>
     </ClCompile>
+    <ClCompile Include="..\src\oregon.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\src\aviwriter\avi.h">
@@ -2634,6 +2635,7 @@
     <ClInclude Include="..\src\output\output_direct3d11.h">
       <Filter>Sources\output</Filter>
     </ClInclude>
+    <ClInclude Include="..\src\oregon.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\src\winres.rc">
