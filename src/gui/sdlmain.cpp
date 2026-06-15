@@ -108,6 +108,9 @@ char* revert_escape_newlines(const char* aMessage);
 #define GL_SILENCE_DEPRECATION
 #endif
 
+#include <oregon.h>
+
+#include <SDL.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -3293,7 +3296,12 @@ void GFX_OpenGLRedrawScreen(void) {
 #endif
 }
 
+
+
 void GFX_EndUpdate(const uint16_t *changedLines) {
+
+    
+
 #if C_EMSCRIPTEN
     emscripten_sleep(0);
 #endif
@@ -3335,6 +3343,8 @@ void GFX_EndUpdate(const uint16_t *changedLines) {
     }
 #endif
 
+    //GFX_EndUpdate_Hook(sdl.surface);
+    
 switch_type:
     switch (sdl.desktop.type)
     {

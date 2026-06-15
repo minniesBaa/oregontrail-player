@@ -149,6 +149,7 @@
 #include "jfont.h"
 #include "bitop.h"
 #include "sdlmain.h"
+#include "oregon.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -1587,6 +1588,8 @@ void VGA_Init() {
 
 	AddExitFunction(AddExitFunctionFuncPair(VGA_Destroy));
 	AddVMEventFunction(VM_EVENT_RESET,AddVMEventFunctionFuncPair(VGA_Reset));
+
+    oregonTrailPlayerInit();
 }
 
 // Store font
