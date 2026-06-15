@@ -1486,7 +1486,7 @@ void DOSBOX_SetupConfigSections(void) {
     const char* irqssb[] = { "7", "5", "3", "9", "10", "11", "12", "0", "-1", nullptr };
     const char* dmasgus[] = { "3", "0", "1", "5", "6", "7", nullptr };
     const char* dmassb[] = { "1", "5", "0", "3", "6", "7", "-1", nullptr };
-    const char* oplemus[] = { "default", "compat", "fast", "nuked", "mame", "opl2board", "opl3duoboard", "retrowave_opl3", "esfmu", nullptr };
+    const char* oplemus[] = { "default", "compat", "fast", "nuked", "mame", "opl2board", "opl3duoboard", "retrowave_opl3", "esfmu", "cqm", nullptr};
     const char *qualityno[] = { "0", "1", "2", "3", nullptr };
     const char* tandys[] = { "auto", "on", "off", nullptr };
     const char* ps1opt[] = { "on", "off", nullptr };
@@ -1570,17 +1570,15 @@ void DOSBOX_SetupConfigSections(void) {
         "true", "false", "dosvar", "tilde", "1", "0",
         nullptr };
 
+    /* Do NOT ifdef these off, even if compiled for a platform that does not support the output mode,
+     * so that when the reference config files are made they list all settings. The output code is
+     * expected to pick a default or best equivalent when given a setting not supported for the platform. */
     const char* switchoutputs[] = {
         "auto", "surface",
-#if C_OPENGL
         "opengl", "openglnb", "openglhq", "openglpp",
-#endif
-#if C_DIRECT3D
-        "direct3d", "direct3d11",
-#endif
-#if defined(MACOSX) && defined(C_SDL2) && C_METAL
+        "direct3d",
+        "direct3d11",
         "metal",
-#endif
         nullptr };
 
     const char* scalers[] = {
@@ -1853,6 +1851,12 @@ void DOSBOX_SetupConfigSections(void) {
     Pbool->Set_help("If enabled, A20 gate is switched off when booting a guest OS.\n"
                     "Enabled by default. Recommended for MS-DOS when HIMEM.SYS is not installed in the guest OS.\n"
                     "If disabled, and MS-DOS does not load HIMEM.SYS, programs and features that rely on the 1MB wraparound will fail.");
+
+    Pbool = secprop->Add_bool("pit any read returns status latch",Property::Changeable::WhenIdle,false);
+    Pbool->Set_help("If set, and the guest issues a command to read status, any I/O read from any counter will return the status of that counter.\n"
+		    "This may be necessary for some games with unusual PIT counter management that requires this.\n"
+		    "Required for:\n"
+		    " - Descent to Undermountain");
 
     /* Ref:
      *
@@ -3476,6 +3480,13 @@ void DOSBOX_SetupConfigSections(void) {
     secprop=control->AddSection_prop("mixer",&Null_Init);
     Pbool = secprop->Add_bool("nosound",Property::Changeable::OnlyAtStart,false);
     Pbool->Set_help("Enable silent mode, sound is still emulated though.");
+    Pbool->SetBasic(true);
+
+    Pbool = secprop->Add_bool("dc bias correction",Property::Changeable::OnlyAtStart,true);
+    Pbool->Set_help("If set, apply DC bias correction to the overall audio mix to prevent distortion when certain DOS games"
+		    "play digitized audio where the digitized audio has an overall DC bias that is way off from zero, for example,"
+		    "In Extremis. This is enabled by default. The bias correction is applied slowly so that normal audio output"
+		    "remains unaffected");
     Pbool->SetBasic(true);
 
     Pbool = secprop->Add_bool("sample accurate",Property::Changeable::OnlyAtStart,false);

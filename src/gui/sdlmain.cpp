@@ -78,7 +78,6 @@ extern bool switchttf, ttfswitch, switch_output_from_ttf;
 extern bool finish_prepare;
 bool checkmenuwidth = false;
 bool dos_kernel_disabled = true;
-bool dos_kernel_shutdown_mcb = true;
 bool winrun=false, use_save_file=false;
 bool maximize = false, tooutttf = false;
 bool tonoime = false, enableime = false;
@@ -1136,9 +1135,15 @@ void GFX_SetTitle(int32_t cycles, int frameskip, Bits timing, bool paused) {
 //  if (timing != -1) internal_timing = timing;
 //  if (frameskip != -1) internal_frameskip = frameskip;
 
+#ifdef C_OSFREE
+    constexpr const char* dosbox_name = "DOSBox-X OSFREE";
+#else
+    constexpr const char* dosbox_name = "DOSBox-X";
+#endif
+
     bool showbasic = section->Get_bool("showbasic");
     if (showbasic) {
-        sprintf(title,"%s%sDOSBox-X %s", dosbox_title.c_str(),dosbox_title.empty()?"":" - ", VERSION);
+        sprintf(title, "%s%s%s %s", dosbox_title.c_str(), dosbox_title.empty() ? "" : " - ", dosbox_name, VERSION);
 
         const char *what = RunningProgram;
         if (what != NULL && *what != 0) {
@@ -1153,7 +1158,7 @@ void GFX_SetTitle(int32_t cycles, int frameskip, Bits timing, bool paused) {
         else
             sprintf(p,"%d cycles/ms", (int)internal_cycles);
     } else
-        sprintf(title,"%s%sDOSBox-X", dosbox_title.c_str(),dosbox_title.empty()?"":" - ");
+        sprintf(title, "%s%s%s", dosbox_title.c_str(), dosbox_title.empty() ? "" : " - ", dosbox_name);
 
     if (!menu.hidecycles) {
         char *p = title + strlen(title); // append to end of string
@@ -2152,6 +2157,7 @@ bool DOSBox_isMenuVisible(void);
 void MenuShadeRect(int x,int y,int w,int h);
 void MenuDrawRect(int x,int y,int w,int h,Bitu color);
 void GFX_DrawSDLMenu(DOSBoxMenu &menu, DOSBoxMenu::displaylist &dl) {
+    menu.check_layout();
     if (!menu.needsRedraw() || (sdl.updating && !OpenGL_using())) {
         return;
     }
@@ -2169,8 +2175,7 @@ void GFX_DrawSDLMenu(DOSBoxMenu &menu, DOSBoxMenu::displaylist &dl) {
 
     if (&dl == &menu.display_list) { /* top level menu, draw background */
         MenuDrawRect(menu.menuBox.x, menu.menuBox.y, menu.menuBox.w, menu.menuBox.h - 1, GFX_GetRGB(63, 63, 63));
-        MenuDrawRect(menu.menuBox.x, menu.menuBox.y + menu.menuBox.h - 1, menu.menuBox.w, 1,
-                     GFX_GetRGB(31, 31, 31));
+        MenuDrawRect(menu.menuBox.x, menu.menuBox.y + menu.menuBox.h - 1, menu.menuBox.w, 1, GFX_GetRGB(31, 31, 31));
     }
 
     if (mustLock) {
@@ -3675,6 +3680,11 @@ void SendKey(std::string key) {
         KEYBOARD_AddKey(KBD_tab, true);
         KEYBOARD_AddKey(KBD_leftalt, false);
         KEYBOARD_AddKey(KBD_tab, false);
+    } else if (key == "sendkey_altsysrq") {
+        KEYBOARD_AddKey(KBD_leftalt, true);
+        KEYBOARD_AddKey(KBD_printscreen, true);
+        KEYBOARD_AddKey(KBD_leftalt, false);
+        KEYBOARD_AddKey(KBD_printscreen, false);
     } else if (key == "sendkey_ctrlesc") {
         KEYBOARD_AddKey(KBD_leftctrl, true);
         KEYBOARD_AddKey(KBD_esc, true);
@@ -4978,7 +4988,7 @@ static void HandleMouseButton(SDL_MouseButtonEvent * button, SDL_MouseMotionEven
     if (button->button == SDL_BUTTON_LEFT) {
         if (button->state == SDL_PRESSED) {
             GFX_SDLMenuTrackHilight(mainMenu,mainMenu.menuUserHoverAt);
-            if (mainMenu.menuUserHoverAt != DOSBoxMenu::unassigned_item_handle) {
+            if (mainMenu.menuUserHoverAt != DOSBoxMenu::unassigned_item_handle && mainMenu.get_item(mainMenu.menuUserHoverAt).is_enabled()) {
                 std::vector<DOSBoxMenu::item_handle_t> popup_stack;
                 DOSBoxMenu::item_handle_t choice_item;
                 DOSBoxMenu::item_handle_t psel_item;
@@ -4993,26 +5003,27 @@ static void HandleMouseButton(SDL_MouseButtonEvent * button, SDL_MouseMotionEven
                 psel_item = DOSBoxMenu::unassigned_item_handle;
                 choice_item = mainMenu.menuUserHoverAt = mainMenu.menuUserAttentionAt;
 
+                mainMenu.get_item(mainMenu.menuUserAttentionAt).check_layout();
                 popup_stack.push_back(mainMenu.menuUserAttentionAt);
 
 #if C_DIRECT3D
-        if (sdl.desktop.want_type == SCREEN_DIRECT3D) {
-            /* In output=direct3d mode, SDL still has a surface but this code ignores SDL
-             * and draws directly to a Direct3D9 backbuffer which is presented to the window
-             * client area. However, GDI output to the window still works, and this code
-             * uses the SDL surface still. Therefore, for menus to draw correctly atop the
-             * Direct3D output, this code copies the Direct3D backbuffer to the SDL surface
-             * first.
-             *
-             * WARNING: This happens to work with Windows (even Windows 10 build 18xx as of
-             * 2018/05/21) because Windows appears to permit mixing Direct3D and GDI rendering
-             * to the window.
-             *
-             * Someday, if Microsoft should break that ability, this code will need to be
-             * revised to send screen "updates" to the Direct3D backbuffer first, then
-             * Present to the window client area. */
-            if (d3d) d3d->UpdateRectToSDLSurface(0, 0, sdl.surface->w, sdl.surface->h);
-        }
+                if (sdl.desktop.want_type == SCREEN_DIRECT3D) {
+                    /* In output=direct3d mode, SDL still has a surface but this code ignores SDL
+                     * and draws directly to a Direct3D9 backbuffer which is presented to the window
+                     * client area. However, GDI output to the window still works, and this code
+                     * uses the SDL surface still. Therefore, for menus to draw correctly atop the
+                     * Direct3D output, this code copies the Direct3D backbuffer to the SDL surface
+                     * first.
+                     *
+                     * WARNING: This happens to work with Windows (even Windows 10 build 18xx as of
+                     * 2018/05/21) because Windows appears to permit mixing Direct3D and GDI rendering
+                     * to the window.
+                     *
+                     * Someday, if Microsoft should break that ability, this code will need to be
+                     * revised to send screen "updates" to the Direct3D backbuffer first, then
+                     * Present to the window client area. */
+                    if (d3d) d3d->UpdateRectToSDLSurface(0, 0, sdl.surface->w, sdl.surface->h);
+                }
 #endif
 
                 if (OpenGL_using()) {
@@ -5266,7 +5277,7 @@ static void HandleMouseButton(SDL_MouseButtonEvent * button, SDL_MouseMotionEven
 
                                     if (sel_item != DOSBoxMenu::unassigned_item_handle) {
                                         if (mainMenu.get_item(sel_item).get_type() == DOSBoxMenu::submenu_type_id) {
-                                            if (!mainMenu.get_item(sel_item).isHilight()) {
+                                            if (!mainMenu.get_item(sel_item).isHilight() && mainMenu.get_item(sel_item).is_enabled()) {
                                                 /* use a copy of the iterator to scan forward and un-hilight the menu items.
                                                  * then use the original iterator to erase from the vector. */
                                                 for (auto ss=search;ss != popup_stack.end();ss++) {
@@ -5278,6 +5289,7 @@ static void HandleMouseButton(SDL_MouseButtonEvent * button, SDL_MouseMotionEven
 
                                                 popup_stack.erase(search,popup_stack.end());
                                                 mainMenu.get_item(sel_item).setHilight(mainMenu,true).setHover(mainMenu,true);
+                                                mainMenu.get_item(sel_item).check_layout();
                                                 popup_stack.push_back(sel_item);
                                                 redrawAll = true;
                                             }
@@ -6832,16 +6844,21 @@ void SDL_SetupConfigSection() {
     Pstring->SetBasic(true);
 
     const char* outputs[] = {
-        "default", "surface", "overlay", "ttf",
+        "default", "surface",
+#if defined(USE_TTF)
+        "ttf",
+#endif
 #if C_OPENGL
         "opengl", "openglnb", "openglhq", "openglpp",
 #endif
 #if C_GAMELINK
         "gamelink",
 #endif
-        "ddraw",
 #if C_DIRECT3D
-        "direct3d", "direct3d11",
+        "direct3d",
+#if defined(C_SDL2)
+        "direct3d11",
+#endif
 #endif
 #if defined(MACOSX) && defined(C_SDL2) && C_METAL
         "metal",
@@ -7895,7 +7912,6 @@ bool VM_Boot_DOSBox_Kernel() {
         DispatchVMEvent(VM_EVENT_DOS_SURPRISE_REBOOT); // <- apparently we rebooted without any notification (such as jmp'ing to FFFF:0000)
 
         dos_kernel_disabled = true;
-        dos_kernel_shutdown_mcb = true;
 
 #if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
         Reflect_Menu();
@@ -7910,7 +7926,6 @@ bool VM_Boot_DOSBox_Kernel() {
 
         /* DOS kernel init */
         dos_kernel_disabled = false; // FIXME: DOS_Init should install VM callback handler to set this
-	dos_kernel_shutdown_mcb = false;
         void DOS_Startup(Section* sec);
         DOS_Startup(NULL);
         maincp = 0;
@@ -7947,6 +7962,9 @@ bool VM_Boot_DOSBox_Kernel() {
         void EMS_Startup(Section* sec);
         EMS_Startup(NULL);
 #endif
+
+        /* possible return to DOSBox-X DOS environment */
+        mainMenu.get_item("HelpCommandMenu").enable();
 
         SHELL_MessagesInit();
         CONFIGSHELL_Init();
@@ -8094,6 +8112,13 @@ bool custom_bios = false;
 size_t custom_bios_image_size = 0;
 Bitu custom_bios_image_offset = 0;
 unsigned char *custom_bios_image = NULL;
+
+/* 2026/06/07: We now accept from BOOT a boot sector to load into memory
+ *             after DOS kernel shutdown, so that the process shutdown
+ *             is cleaner and the "don't check MCB corruption" flag is
+ *             no longer necessary. */
+std::vector<uint8_t> boot_code_image;
+PhysPt boot_code_image_load_to = 0;
 
 // OK why isn't this being set for Linux??
 #ifndef SDL_MAIN_NOEXCEPT
@@ -9904,6 +9929,9 @@ int main(int argc, char* argv[]) SDL_MAIN_NOEXCEPT {
         mainMenu.get_item("load_ttf_font").enable(TTF_using());
 #endif
 
+        /* why show PC-98 options in IBM PC emulation mode? */
+        mainMenu.get_item("VideoPC98Menu").hide(!IS_PC98_ARCH).refresh_item(mainMenu);
+
 #if !defined(C_EMSCRIPTEN)
         mainMenu.get_item("show_console").check(showconsole_init).refresh_item(mainMenu);
         mainMenu.get_item("clear_console").check(false).enable(showconsole_init).refresh_item(mainMenu);
@@ -10273,7 +10301,6 @@ fresh_boot:
              * do not attempt to manipulate now-defunct parts of the kernel
              * such as the environment block */
             dos_kernel_disabled = true;
-            dos_kernel_shutdown_mcb = true;
 
             std::string core(static_cast<Section_prop *>(control->GetSection("cpu"))->Get_string("core"));
             if (!strcmp(RunningProgram, "LOADLIN") && core == "auto") {
@@ -10293,6 +10320,11 @@ fresh_boot:
 #if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
             Reflect_Menu();
 #endif
+
+            /* proceed to real mode */
+            void CPU_Snap_Back_Forget();
+            CPU_Snap_Back_To_Real_Mode();
+            CPU_Snap_Back_Forget();
         }
 
 #if DOSBOXMENU_TYPE == DOSBOXMENU_HMENU
@@ -10314,10 +10346,21 @@ fresh_boot:
             /* if instructed, turn off A20 at boot */
             if (disable_a20) MEM_A20_Enable(false);
 
+            /* Why allow the Help -> DOS commands menu when running a guest OS? */
+            mainMenu.get_item("HelpCommandMenu").enable(false).refresh_item(mainMenu);
+
             /* PC-98: hide the cursor */
             if (IS_PC98_ARCH) {
                 void PC98_show_cursor(bool show);
                 PC98_show_cursor(false);
+            }
+
+            /* if BOOT gave us code to load, do it -- I hope you set boot_code_image_load_to to a nonzero value! */
+            if (!boot_code_image.empty()) {
+                LOG_MSG("Loading %u bytes of boot code to %x",(unsigned int)boot_code_image.size(),(unsigned int)boot_code_image_load_to);
+                MEM_BlockWrite(boot_code_image_load_to,boot_code_image.data(),boot_code_image.size());
+                boot_code_image_load_to = 0;
+                boot_code_image.clear();
             }
 
             /* new code: fire event */

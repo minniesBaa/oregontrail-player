@@ -149,6 +149,7 @@ extern bool logBuffSuppressConsole;
 extern bool logBuffSuppressConsoleNeedUpdate;
 
 void DEBUG_PrintGUS();
+void DEBUG_PrintRTC();
 
 // Forwards
 static void DrawCode(void);
@@ -292,6 +293,7 @@ typedef struct MEMFinder {
 	uint16_t iterations = 0;
 	uint16_t seg = 0;
 	uint32_t ofs = 0;
+	uint32_t baseLinear = 0;
 	uint32_t range = 0;
 	uint32_t value = 0;
 	uint32_t matches = 0;
@@ -2028,7 +2030,7 @@ bool ParseCommand(char* str) {
 			if (MEMFINDInstance != NULL){
 				DEBUG_BeginPagedContent();
 				uint32_t j = 0;
-				for (uint32_t i = (MEMFINDInstance->ofs + (MEMFINDInstance->seg * 16)); i < (MEMFINDInstance->ofs + (MEMFINDInstance->seg * 16) + MEMFINDInstance->range); i+=MEMFINDInstance->size){
+				for (uint32_t i = MEMFINDInstance->baseLinear; i < MEMFINDInstance->baseLinear + MEMFINDInstance->range; i+=MEMFINDInstance->size){
 							switch (MEMFINDInstance->size){
 								case 1:
 									mem_readb_checked((PhysPt)(i),&valfind8);
@@ -2049,7 +2051,7 @@ bool ParseCommand(char* str) {
 							}
 							if (MEMFINDInstance->tableTruth[j] == true){
 								listedvalues++;
-								DEBUG_ShowMsg("DEBUG: [MEMFIND] Address: %04X:%06X Current Value: %08X\n",MEMFINDInstance->seg,(i - (MEMFINDInstance->seg * 16)),valfind);
+								DEBUG_ShowMsg("DEBUG: [MEMFIND] Address: %04X:%06X (lin %08X) Current Value: %0*X\n",MEMFINDInstance->seg,(MEMFINDInstance->ofs + (i - MEMFINDInstance->baseLinear)),i,MEMFINDInstance->size*2,valfind);
 							}
 							j+=MEMFINDInstance->size;
 						}
@@ -2064,12 +2066,19 @@ bool ParseCommand(char* str) {
 		uint32_t ofs = GetHexValue(found,found); found++;
 		uint32_t num = GetHexValue(found,found); found++;
 		if ((MEMFINDInstance == NULL) && (num > 0)){
-			if (((seg*16)+ofs+num) > 16777215){
-				DEBUG_ShowMsg("DEBUG: Address range larger than valid size, cancelling.");
+			uint64_t base = GetAddress(seg,ofs);
+			if (base == mem_no_address){
+				DEBUG_ShowMsg("DEBUG: Invalid selector/segment, cancelling.");
+				return true;
+			}
+			uint64_t memBytes = (uint64_t)MEM_TotalPages() << 12;
+			if ((base + (uint64_t)num) > memBytes){
+				DEBUG_ShowMsg("DEBUG: Range exceeds configured memory (%lX bytes), cancelling.",(unsigned long)memBytes);
 				return true;
 			}
 			DEBUG_ShowMsg("DEBUG: Created memory search instance.");
 			MEMFINDInstance = new MEMFinder;
+			MEMFINDInstance->baseLinear = (uint32_t)base;
 		} else if ((MEMFINDInstance == NULL) && (num == 0)){
 			DEBUG_ShowMsg("DEBUG: --MEMFIND-- Start memory search instance.");
 			DEBUG_ShowMsg("DEBUG: Use MEMS to proceed through search instance.");
@@ -2099,12 +2108,12 @@ bool ParseCommand(char* str) {
 				MEMFINDInstance->size = 1;
 				break;
 		}
-		DEBUG_ShowMsg("DEBUG: RAM search from %04X:%04X with range: %06X\n",seg,ofs,num);
+		DEBUG_ShowMsg("DEBUG: RAM search from %04X:%04X (lin %08X) with range: %06X\n",seg,ofs,MEMFINDInstance->baseLinear,num);
 		MEMFINDInstance->range = num;
 		MEMFINDInstance->ofs = ofs;
 		MEMFINDInstance->seg = seg;
 		MEMFINDInstance->tableTruth.resize(num,true);
-		for (uint32_t i = (MEMFINDInstance->ofs + (MEMFINDInstance->seg * 16)); i < (MEMFINDInstance->ofs + (MEMFINDInstance->seg * 16) + MEMFINDInstance->range); i++){
+		for (uint32_t i = MEMFINDInstance->baseLinear; i < MEMFINDInstance->baseLinear + MEMFINDInstance->range; i++){
 			mem_readb_checked((PhysPt)(i),&valfind8);
 			MEMFINDInstance->tableValue.push_back(valfind8);
 		}
@@ -2181,7 +2190,7 @@ bool ParseCommand(char* str) {
 			MEMFINDInstance->usePreviousValue = false;
 		}
 		uint32_t y = 0;	//This index is seperated from the for loop, as the for loop can start from any index while this particular index starts at 0
-		for (uint32_t i = (MEMFINDInstance->ofs + (MEMFINDInstance->seg * 16)); i < (MEMFINDInstance->ofs + (MEMFINDInstance->seg * 16) + MEMFINDInstance->range); i+=MEMFINDInstance->size){
+		for (uint32_t i = MEMFINDInstance->baseLinear; i < MEMFINDInstance->baseLinear + MEMFINDInstance->range; i+=MEMFINDInstance->size){
 			switch (MEMFINDInstance->size){
 				case 1:
 					mem_readb_checked((PhysPt)(i),&valfind8);
@@ -2264,7 +2273,7 @@ bool ParseCommand(char* str) {
 			if (MEMFINDInstance->usePreviousValue == true){
 				DEBUG_ShowMsg("DEBUG: No more matches found when comparing %s previous value. Memory search instance finished.\n",opTypeStr);
 			} else {
-				DEBUG_ShowMsg("DEBUG: No more matches found with value %s (%06X). Memory search instance finished.\n",opTypeStr,value);
+				DEBUG_ShowMsg("DEBUG: No more matches found with value %s (%0*X). Memory search instance finished.\n",opTypeStr,MEMFINDInstance->size*2,value);
 			}
 			MEMFINDInstance->tableTruth.clear();
 			MEMFINDInstance->tableValue.clear();
@@ -2276,7 +2285,7 @@ bool ParseCommand(char* str) {
 				if (MEMFINDInstance->usePreviousValue == true){
 					DEBUG_ShowMsg("DEBUG: (%06X) addresses matching %s their previous values. Iterations: %06X\n",MEMFINDInstance->matches,opTypeStr,MEMFINDInstance->iterations);
 				} else {
-					DEBUG_ShowMsg("DEBUG: (%06X) matches found with value %s (%06X). Iterations: %06X\n",MEMFINDInstance->matches,opTypeStr,value,MEMFINDInstance->iterations);
+					DEBUG_ShowMsg("DEBUG: (%06X) matches found with value %s (%0*X). Iterations: %06X\n",MEMFINDInstance->matches,opTypeStr,MEMFINDInstance->size*2,value,MEMFINDInstance->iterations);
 				}
 		}
 		return true;
@@ -3226,8 +3235,22 @@ bool ParseCommand(char* str) {
         return true;
     }
 
+    if (command == "RTC") {
+        while (*found == ' ') found++;
+        command.clear(); // iostream >> command does not update "command" if there is no string there, so it's basically fancy scanf() then!
+        stream >> command;
+        while (*found != 0 && *found != ' ') found++;
+        while (*found == ' ') found++;
+
+        if (command == "") {
+            DEBUG_PrintRTC();
+            return true;
+        }
+    }
+
     if (command == "VGA") {
         while (*found == ' ') found++;
+        command.clear(); // iostream >> command does not update "command" if there is no string there, so it's basically fancy scanf() then!
         stream >> command;
         while (*found != 0 && *found != ' ') found++;
         while (*found == ' ') found++;
@@ -4316,11 +4339,96 @@ int32_t DEBUG_Run(int32_t amount,bool quickexit) {
 	return ret;
 }
 
+#ifdef WIN32
+/* Translate VT escape sequences into ncurses KEY_* constants. Needed because
+   we set ENABLE_VIRTUAL_TERMINAL_INPUT on the debugger console input handle
+   (so the terminal host stops swallowing F11 etc. for fullscreen). With that
+   flag, function keys arrive as VT sequences (e.g. F11 = ESC [ 23 ~) instead of
+   virtual key codes, so ncurses' getch() returns them char by char and the
+   KEY_F(N) cases below never fire. */
+static int dbg_getch_vt(void) {
+	int c = getch();
+	if (c != 27) return c;
+
+	int c2 = getch();
+	if (c2 < 0) return 27; /* plain ESC */
+
+	if (c2 == 'O') {
+		/* SS3: ESC O X */
+		int c3 = getch();
+		switch (c3) {
+			case 'P': return KEY_F(1);
+			case 'Q': return KEY_F(2);
+			case 'R': return KEY_F(3);
+			case 'S': return KEY_F(4);
+			case 'A': return KEY_UP;
+			case 'B': return KEY_DOWN;
+			case 'C': return KEY_RIGHT;
+			case 'D': return KEY_LEFT;
+			case 'H': return KEY_HOME;
+			case 'F': return KEY_END;
+		}
+		return 27;
+	}
+
+	if (c2 == '[') {
+		/* CSI: ESC [ [params] final */
+		int param = 0;
+		int c3 = getch();
+		while (c3 >= '0' && c3 <= '9') {
+			param = param * 10 + (c3 - '0');
+			c3 = getch();
+		}
+		if (c3 == '~') {
+			switch (param) {
+				case 1: return KEY_HOME;
+				case 2: return KEY_IC;
+				case 3: return KEY_DC;
+				case 4: return KEY_END;
+				case 5: return KEY_PPAGE;
+				case 6: return KEY_NPAGE;
+				case 11: return KEY_F(1);
+				case 12: return KEY_F(2);
+				case 13: return KEY_F(3);
+				case 14: return KEY_F(4);
+				case 15: return KEY_F(5);
+				case 17: return KEY_F(6);
+				case 18: return KEY_F(7);
+				case 19: return KEY_F(8);
+				case 20: return KEY_F(9);
+				case 21: return KEY_F(10);
+				case 23: return KEY_F(11);
+				case 24: return KEY_F(12);
+			}
+		} else if (param == 0) {
+			switch (c3) {
+				case 'A': return KEY_UP;
+				case 'B': return KEY_DOWN;
+				case 'C': return KEY_RIGHT;
+				case 'D': return KEY_LEFT;
+				case 'H': return KEY_HOME;
+				case 'F': return KEY_END;
+			}
+		}
+		return 27;
+	}
+
+	/* Alt+letter or other ESC-prefixed sequence — push back so the existing
+	   case 27 handler below can read it as before. */
+	ungetch(c2);
+	return 27;
+}
+#endif
+
 uint32_t DEBUG_CheckKeys(void) {
 	Bits ret=0;
 	bool numberrun = false;
 	bool skipDraw = false;
+#ifdef WIN32
+	int key=dbg_getch_vt();
+#else
 	int key=getch();
+#endif
 
     if (key == KEY_RESIZE) {
 #ifdef WIN32 /* BUG: pdcurses notifies us immediately upon getting a resize event but does not update it's
