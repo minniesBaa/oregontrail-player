@@ -1,3 +1,12 @@
+# oregontrail-player
+
+dosbox-x fork programmed to play the Oregon Trail game
+
+this does not come with a copy of the Oregon Trail, you must provide your own.
+
+only currently supports oregon trail v2.1, v2.0 support coming soon
+
+## original dosbox-x readme
 
 **Welcome to the DOSBox-X project homepage located on GitHub.**
 
@@ -43,7 +52,7 @@ Brought to you by: joncampbell123 (Jonathan Campbell)
 
 ## Legal notice
 
-If you reside in a jurisdiction that enforces OS level age verification, you are only permitted to use the main-osfree branch of this project (including builds), and are prohibited from using the main (master) branch of this project.
+If you reside in a jurisdiction that enforces OS level age verification, you are not permitted to use this software. 
 
 ## Notable features in DOSBox-X
 
