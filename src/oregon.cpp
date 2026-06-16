@@ -1,6 +1,10 @@
 #include <SDL.h>
 #include <oregon.h>
-#include <windows.h>
+
+
+//#include <windows.h>
+
+
 #include <keyboard.h>
 #include <array>
 #include "pic.h"
@@ -107,7 +111,7 @@ bool travel() {
     const std::array<Uint8, 3> darkgreen = { 69, 113, 0 };
     const std::array<Uint8, 3> tan = { 146, 93, 52 };
 
-    OutputDebugStringA(std::to_string(lmCount).c_str());
+    //OutputDebugStringA(std::to_string(lmCount).c_str());
 
     switch(travelState) {
     case 0:
@@ -127,11 +131,11 @@ bool travel() {
             count = 0;
             if(lmCount == 1 || lmCount == 2 || lmCount == 9 || lmCount == 12) {
                 travelState = 1;
-                OutputDebugStringA(":|\n");
+                //OutputDebugStringA(":|\n");
             }
             else if(lmCount == 8) {
                 travelState = 3;
-                OutputDebugStringA(":)\n");
+                //OutputDebugStringA(":)\n");
             }
             else if(lmCount == 14) {
                 travelState = 5;
@@ -141,7 +145,7 @@ bool travel() {
             }
             else {
                 travelState = 2;
-                OutputDebugStringA(":(\n");
+                //OutputDebugStringA(":(\n");
             }
         }
         if(disableFrames == 0
@@ -293,7 +297,7 @@ void playerTick(Bitu /*val*/) {
 
     switch(name) {
     case 0:
-        OutputDebugStringA("part 1\n");
+        //OutputDebugStringA("part 1\n");
         /*  wait for BIOS and autoexec  */
         if(count == 15) {
             setName(1);
@@ -303,7 +307,7 @@ void playerTick(Bitu /*val*/) {
         }
         break;
     case 1:
-        OutputDebugStringA("part 2\n");
+        //OutputDebugStringA("part 2\n");
         /*  input starting menus  */
         interval++;
         if(interval >= 2 /* && menu[count] != KBD_NONE*/) {
@@ -318,7 +322,7 @@ void playerTick(Bitu /*val*/) {
         }
         break;
     case 2:
-        OutputDebugStringA("part 3\n");
+        //OutputDebugStringA("part 3\n");
         /*  wait for independence missouri screen to load  */
         if(count == 15) {
             setName(3);
@@ -328,7 +332,7 @@ void playerTick(Bitu /*val*/) {
         }
         break;
     case 3:
-        OutputDebugStringA("part 4\n");
+        //OutputDebugStringA("part 4\n");
         /*  set rations and pace  */
         interval++;
         if(interval >= 2) {
